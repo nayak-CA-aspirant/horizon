@@ -121,6 +121,15 @@ fn str_field(v: &Value, key: &str) -> Option<String> {
 /// On unless turned off: `HORIZON_OFFLINE_PLAY=0` (or `false`) restores the Microsoft owner gate,
 /// anything else (unset included) keeps offline play on. Nothing here ever downloads Mojang's
 /// files (`backend::download_for_owner` keeps the strict gate).
+/// Unit tests always run the strict gate: they exercise the owner checks against their own mock
+/// services, whatever the machine's environment says (a CI runner with the variable unset used to
+/// pass the gate here and fail every account test that expects a refusal or a session).
+#[cfg(test)]
+pub fn offline_play() -> bool {
+    false
+}
+
+#[cfg(not(test))]
 pub fn offline_play() -> bool {
     match std::env::var("HORIZON_OFFLINE_PLAY") {
         Ok(v) => !(v == "0" || v.eq_ignore_ascii_case("false")),
