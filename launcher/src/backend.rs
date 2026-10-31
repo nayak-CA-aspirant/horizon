@@ -2306,7 +2306,10 @@ pub fn need_prepared(tag: &str) -> Result<(), String> {
 /// the gate, a sign-in that can't be renewed (no network, expired) still lets the game start,
 /// offline.
 pub fn client(tag: &str) -> Result<Command, String> {
-    let (session, offline) = account::session_for_game(&game_home(), false)
+    // Offline play (HORIZON_OFFLINE_PLAY, on by default): no owner is needed; the game starts
+    // offline from the player's local files. Otherwise the developer option acts the same way.
+    let offline_without_owner = account::offline_play();
+    let (session, offline) = account::session_for_game(&game_home(), offline_without_owner)
         .map_err(|refused| format!("{refused} Sign in with `horizon-launcher account sign-in`."))?;
     need_prepared(tag)?;
     complete_assets(tag);
@@ -3121,9 +3124,10 @@ impl Settings {
     pub fn load() -> Self {
         let mut settings =
             Self::parse(&fs::read_to_string(data_dir().join("settings.json")).unwrap_or_default());
-        // Offline play (HORIZON_OFFLINE_PLAY=1): the same effect as the window's hidden developer
-        // option, for a desktop with no internet connection and no Microsoft sign-in. The game
-        // still comes from the player's own local Minecraft install.
+        // Offline play (on by default, HORIZON_OFFLINE_PLAY): the same effect as the window's
+        // hidden developer option, for a desktop with no internet connection and no Microsoft
+        // sign-in. The game still comes from the player's own local Minecraft install. Turn it off
+        // with HORIZON_OFFLINE_PLAY=0 to get the owner gate back.
         if account::offline_play() {
             settings.dev_offline = true;
         }
