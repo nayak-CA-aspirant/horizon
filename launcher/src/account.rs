@@ -116,14 +116,16 @@ fn str_field(v: &Value, key: &str) -> Option<String> {
     v.get(key).and_then(Value::as_str).map(str::to_owned)
 }
 
-/// Offline play (`HORIZON_OFFLINE_PLAY=1`): every owner gate passes without asking Microsoft
-/// anything, so the game starts offline with no internet at all. The game still comes from the
-/// player's own local Minecraft install; nothing here ever downloads Mojang's files
-/// (`backend::download_for_owner` keeps the strict gate). Set it to 0 or empty to turn off.
+/// Offline play: every owner gate passes without asking Microsoft anything, so the game starts
+/// offline with no internet at all, straight from the player's own local Minecraft install.
+/// On unless turned off: `HORIZON_OFFLINE_PLAY=0` (or `false`) restores the Microsoft owner gate,
+/// anything else (unset included) keeps offline play on. Nothing here ever downloads Mojang's
+/// files (`backend::download_for_owner` keeps the strict gate).
 pub fn offline_play() -> bool {
-    std::env::var("HORIZON_OFFLINE_PLAY")
-        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-        .unwrap_or(false)
+    match std::env::var("HORIZON_OFFLINE_PLAY") {
+        Ok(v) => !(v == "0" || v.eq_ignore_ascii_case("false")),
+        Err(_) => true,
+    }
 }
 
 fn now() -> u64 {
@@ -1351,6 +1353,23 @@ pub fn session_for_game(
     offline_without_owner: bool,
 ) -> Result<(Option<PathBuf>, Option<String>), NoOwner> {
     let mut accounts = Accounts::load();
+    // Offline play with no account picked yet: play as the name in HORIZON_OFFLINE_NAME (the
+    // desktop's own Minecraft profile name is a good value), so the launcher never sits on the
+    // Microsoft sign-in screen and the game starts straight from the local files.
+    if offline_play() && accounts.player() == Player::GameName {
+        if let Some(name) = std::env::var("HORIZON_OFFLINE_NAME")
+            .ok()
+            .map(|n| n.trim().to_owned())
+            .filter(|n| !n.is_empty())
+        {
+            if accounts
+                .play_as_with(store(), Player::Offline(name), true)
+                .is_ok()
+            {
+                let _ = accounts.save();
+            }
+        }
+    }
     let pass = launch_for_game(
         &Endpoints::live(),
         client_id().as_deref(),

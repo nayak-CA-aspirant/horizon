@@ -4,6 +4,22 @@ A small desktop app that installs Horizon builds, prepares them from your own co
 Minecraft, and starts the client or a dedicated server. Built with [GPUI](https://www.gpui.rs),
 Zed's UI framework; it has its own Cargo workspace and is not part of the game's builds.
 
+## Offline play (this build)
+
+This build plays **without a Microsoft sign-in and without any internet connection**: the owner
+gate is off by default (`account::offline_play`), so the launcher starts the game straight from
+your local Minecraft files. No release list, update check or telemetry request is made.
+
+- **Point it at your files**: Settings > Minecraft folder picks the folder that contains
+  `versions/` (usually `%APPDATA%\.minecraft`; on the command line:
+  `horizon-launcher settings minecraft-dir PATH`, or `HORIZON_MINECRAFT_DIR`). Then press
+  Play — preparation imports from your install, nothing is downloaded.
+- **Your name**: set `HORIZON_OFFLINE_NAME=YourName` before starting the launcher to play
+  offline as that name (the name from your own Minecraft install works well); you can also add
+  an offline name in Settings > Account. Worlds, settings and saves stay where they are.
+- **To get the Microsoft gate back** (e.g. to join online-mode servers): start the launcher with
+  `HORIZON_OFFLINE_PLAY=0`.
+
 ![Play](docs/play.png)
 
 The opening, then Play ([clip](docs/opening.webm)):
