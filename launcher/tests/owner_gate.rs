@@ -6,8 +6,10 @@ use std::process::{Command, Output, Stdio};
 
 const REFUSED: &str = "Sign in with a Microsoft account that owns Minecraft: Java Edition to play.";
 
-/// Fresh homes with one installed (not prepared) version and an offline name, as a player who
-/// played offline before the gate has.
+/// Fresh homes with one installed *and prepared* version and an offline name, as a player who
+/// played offline before the gate has. The version is prepared by hand (its resources manifest
+/// written where `backend::is_prepared` looks) so Play reaches the owner gate itself instead of
+/// stopping earlier on "v2026.10.27.01 is not prepared yet" — that error names no refusal to fix.
 fn home(name: &str) -> PathBuf {
     let root =
         std::env::temp_dir().join(format!("horizon-owner-gate-{name}-{}", std::process::id()));
@@ -15,6 +17,17 @@ fn home(name: &str) -> PathBuf {
     let version = root.join("launcher/versions/v2026.10.27.01");
     std::fs::create_dir_all(&version).unwrap();
     std::fs::write(version.join(".installed"), "").unwrap();
+    // A version folder alone answers its game version from research-lock.json beside it; without
+    // one it falls back to the built-in default. Prepare under that default path either way:
+    // launcher/versions/<tag>/.local/horizon-client/<game>/horizon-resources.json.
+    let game = std::fs::read_to_string(root.join("launcher/versions/research-lock.json"))
+        .ok()
+        .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
+        .and_then(|v| v["minecraft"]["version"].as_str().map(str::to_owned))
+        .unwrap_or_else(|| "26.3".to_string());
+    let resources = version.join(".local/horizon-client").join(&game);
+    std::fs::create_dir_all(&resources).unwrap();
+    std::fs::write(resources.join("horizon-resources.json"), "{}\n").unwrap();
     std::fs::write(
         root.join("launcher/accounts.json"),
         r#"{"accounts":[],"selected":null,"offline":["Builder_1"],"offline_selected":"Builder_1"}"#,
@@ -33,6 +46,10 @@ fn launcher(root: &Path, args: &[&str]) -> Command {
         .env("HORIZON_LAUNCHER_NO_SELF_UPDATE", "1")
         .env("HORIZON_NO_AUDIO", "1")
         .env("HORIZON_TELEMETRY_URL", "off")
+        // These tests are exactly about the owner gate: turn offline play off, whatever the
+        // machine's environment says (it is on by default, and a CI runner with the variable
+        // unset passed the gate here and saw no refusal at all).
+        .env("HORIZON_OFFLINE_PLAY", "0")
         // Memory only: the test never reads the player's keychain.
         .env("HORIZON_NO_KEYCHAIN", "1")
         .env("HORIZON_MSA_CLIENT_ID", "test-client");
