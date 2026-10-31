@@ -2498,6 +2498,10 @@ fn releases_and_updates_with(
 
 /// A fresh release-list request for both kinds of update (plus older-launcher fallback if needed).
 pub fn check_updates() -> Result<Updates, String> {
+    // Offline play (HORIZON_OFFLINE_PLAY): no release list is asked for; nothing to update.
+    if account::offline_play() {
+        return Ok(Updates::default());
+    }
     releases_and_updates(|_| {})
 }
 
@@ -3115,7 +3119,15 @@ pub struct Settings {
 
 impl Settings {
     pub fn load() -> Self {
-        Self::parse(&fs::read_to_string(data_dir().join("settings.json")).unwrap_or_default())
+        let mut settings =
+            Self::parse(&fs::read_to_string(data_dir().join("settings.json")).unwrap_or_default());
+        // Offline play (HORIZON_OFFLINE_PLAY=1): the same effect as the window's hidden developer
+        // option, for a desktop with no internet connection and no Microsoft sign-in. The game
+        // still comes from the player's own local Minecraft install.
+        if account::offline_play() {
+            settings.dev_offline = true;
+        }
+        settings
     }
     pub fn parse(text: &str) -> Self {
         let Ok(mut value) = serde_json::from_str::<serde_json::Value>(text) else {

@@ -732,6 +732,13 @@ impl Launcher {
     }
 
     fn fetch_startup_releases(&mut self) {
+        // Offline play (HORIZON_OFFLINE_PLAY): no release list is asked for; nothing to update.
+        if account::offline_play() {
+            self.checked = Some(Instant::now());
+            let _ = self.tx.send(Msg::Releases(Ok(Vec::new())));
+            let _ = self.tx.send(Msg::Updates(Ok(Box::default())));
+            return;
+        }
         self.checked = Some(Instant::now());
         let tx = self.tx.clone();
         std::thread::spawn(move || {
@@ -815,6 +822,12 @@ impl Launcher {
                         let (file, offline) = match session {
                             Ok(pass) => pass,
                             Err(account::NoOwner) => {
+                                // Offline play (HORIZON_OFFLINE_PLAY): never show the sign-in
+                                // gate; start the game offline with the local files.
+                                if account::offline_play() {
+                                    self.owner = Some(true);
+                                    continue;
+                                }
                                 self.owner = Some(false);
                                 self.owner_screen_open = true;
                                 self.client_error = Some(format!("{}.", tr(account::NEEDS_OWNER)));

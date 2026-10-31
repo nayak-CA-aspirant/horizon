@@ -116,6 +116,16 @@ fn str_field(v: &Value, key: &str) -> Option<String> {
     v.get(key).and_then(Value::as_str).map(str::to_owned)
 }
 
+/// Offline play (`HORIZON_OFFLINE_PLAY=1`): every owner gate passes without asking Microsoft
+/// anything, so the game starts offline with no internet at all. The game still comes from the
+/// player's own local Minecraft install; nothing here ever downloads Mojang's files
+/// (`backend::download_for_owner` keeps the strict gate). Set it to 0 or empty to turn off.
+pub fn offline_play() -> bool {
+    std::env::var("HORIZON_OFFLINE_PLAY")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false)
+}
+
 fn now() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -980,6 +990,10 @@ impl Accounts {
     /// Whether an account here owned the game at its last check (the keychain's answer, no
     /// request): what Play and offline names need.
     pub fn has_owner(&self, store: &dyn SecretStore) -> bool {
+        // Offline play (HORIZON_OFFLINE_PLAY): no account is asked, the gate simply passes.
+        if offline_play() {
+            return true;
+        }
         self.accounts
             .iter()
             .any(|a| secrets_in(store, &a.uuid).is_some_and(|s| s.owns))
@@ -1154,6 +1168,11 @@ pub fn launch(
     store: &dyn SecretStore,
     accounts: &mut Accounts,
 ) -> Result<Launch, NoOwner> {
+    // Offline play (HORIZON_OFFLINE_PLAY): pass at once, without a session and without asking
+    // Microsoft anything. The game starts offline with the player's local files.
+    if offline_play() {
+        return Ok(Launch::default());
+    }
     let selected = accounts.selected.clone();
     let mut order = accounts.accounts.clone();
     order.sort_by_key(|a| Some(&a.uuid) != selected.as_ref());
